@@ -1,0 +1,90 @@
+name: RN Multiagent Review (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      pipeline_ref:
+        description: "Git ref of dkdk22/rn-review-pipeline to use for agents/prompt"
+        type: string
+        default: main
+      node_version:
+        type: string
+        default: "20"
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  rn-review:
+    # This job's own pass/fail IS the required check — branch protection
+    # should require "RN Multiagent Review (reusable) / rn-review".
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Checkout rn-review-pipeline (agents & prompt)
+        uses: actions/checkout@v4
+        with:
+          repository: dkdk22/rn-review-pipeline
+          ref: ${{ inputs.pipeline_ref }}
+          path: .rn-pipeline
+
+      - name: Install pipeline agents into this run
+        run: |
+          mkdir -p .claude/agents
+          cp .rn-pipeline/agents/*.md .claude/agents/
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Load orchestrator prompt
+        id: load_prompt
+        run: |
+          {
+            echo 'prompt<<RN_PIPELINE_PROMPT_EOF'
+            cat .rn-pipeline/prompts/orchestrator.md
+            echo 'RN_PIPELINE_PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run rn-review-pipeline
+        uses: anthropics/claude-code-action@v1
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: ${{ steps.load_prompt.outputs.prompt }}
+          claude_args: |
+            --model claude-sonnet-5
+            --allowedTools Edit,Read,Write,Bash,Task,Grep,Glob
+
+      - name: Enforce verdict
+        run: |
+          if [ ! -f .rn-review-verdict.json ]; then
+            echo "::error::rn-review-pipeline did not produce a verdict file — treating as failure."
+            exit 1
+          fi
+          pass=$(node -pe "require('./.rn-review-verdict.json').pass")
+          summary=$(node -pe "require('./.rn-review-verdict.json').summary")
+          echo "Verdict: pass=$pass"
+          echo "Summary: $summary"
+          if [ "$pass" != "true" ]; then
+            echo "::error::rn-review-pipeline verdict is failing — see PR comment for details."
+            exit 1
+          fi
