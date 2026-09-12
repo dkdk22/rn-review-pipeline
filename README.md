@@ -28,12 +28,17 @@ sería una fase siguiente si hace falta e2e ejecutado automáticamente.
 
 ## Cómo integrar un repo nuevo
 
-En el repo del proyecto RN (no aquí):
+Este pipeline corre con tu **suscripción de Claude (Pro/Max)**, no con una
+API key de pago por token:
 
-1. Añade el secret `ANTHROPIC_API_KEY` en Settings → Secrets and variables →
-   Actions (repo secret; si mueves tus repos a una organización, puedes
-   ponerlo como secret de organización una sola vez para todos).
-2. Crea `.github/workflows/pr-review.yml`:
+1. En tu máquina (con la CLI de Claude Code y sesión iniciada en tu cuenta
+   Pro/Max), genera un token: `claude setup-token`. Copia el valor que
+   imprime.
+2. En el repo del proyecto RN (no aquí), añade ese valor como secret
+   `CLAUDE_CODE_OAUTH_TOKEN` en Settings → Secrets and variables → Actions.
+   (Si mueves tus repos a una organización, puedes ponerlo una sola vez como
+   secret de organización para que cubra todos los repos.)
+3. Crea `.github/workflows/pr-review.yml`:
 
    ```yaml
    name: PR Review
@@ -46,12 +51,17 @@ En el repo del proyecto RN (no aquí):
      rn-review:
        uses: dkdk22/rn-review-pipeline/.github/workflows/rn-multiagent-review.yml@main
        secrets:
-         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+         CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
    ```
 
-3. Una vez que el workflow haya corrido al menos una vez, ve a Settings →
+4. Una vez que el workflow haya corrido al menos una vez, ve a Settings →
    Branches → Branch protection rule para tu rama principal, y marca como
    required el check `RN Multiagent Review (reusable) / rn-review`.
+
+Nota: el token de `claude setup-token` puede expirar con el tiempo — si el
+workflow empieza a fallar en el paso de autenticación, genera uno nuevo y
+actualiza el secret. También cuenta contra los límites de uso de tu plan
+Pro/Max, igual que usar Claude Code interactivamente.
 
 Eso es todo — actualizar `agents/*.md` o `prompts/orchestrator.md` aquí
 mejora el pipeline en todos los repos que lo usan, sin tocar nada en ellos.
