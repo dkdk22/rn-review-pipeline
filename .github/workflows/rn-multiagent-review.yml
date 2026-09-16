@@ -136,12 +136,21 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Exclude workflow-internal paths: .rn-pipeline is the checked-out
-          # rn-review-pipeline clone (not app content), .rn-review-verdict.json
-          # is read by the next step and must stay on disk (just not committed),
-          # and .claude/agents is this run's copied subagent defs, not the
-          # project's own .claude config.
-          if [ -n "$(git status --porcelain -- . ':!.rn-pipeline' ':!.claude/agents' ':!.rn-review-verdict.json')" ]; then
+          # Exclude every path claude-code-action itself manages/restores as
+          # "untrusted PR head" content (.claude, CLAUDE.md, CLAUDE.local.md,
+          # .mcp.json, .claude.json, .gitmodules, .ripgreprc, .husky — it
+          # moves/removes these during its own setup, which git sees as
+          # deletions; committing those would delete real project files),
+          # plus our own workflow-internal paths: .rn-pipeline (the checked-
+          # out rn-review-pipeline clone) and .rn-review-verdict.json (read
+          # by the next step, must stay on disk but not be committed).
+          EXCLUDES=(
+            ':!.rn-pipeline' ':!.rn-review-verdict.json'
+            ':!.claude' ':!CLAUDE.md' ':!CLAUDE.local.md'
+            ':!.mcp.json' ':!.claude.json' ':!.gitmodules'
+            ':!.ripgreprc' ':!.husky'
+          )
+          if [ -n "$(git status --porcelain -- . "${EXCLUDES[@]}")" ]; then
             git config user.name "rn-review-pipeline"
             git config user.email "rn-review-pipeline@users.noreply.github.com"
             # claude-code-action revokes its own installation token as soon as
@@ -149,7 +158,7 @@ jobs:
             # with the still-valid workflow GITHUB_TOKEN rather than relying on
             # whatever git credential state it left behind.
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
-            git add -A -- . ':!.rn-pipeline' ':!.claude/agents' ':!.rn-review-verdict.json'
+            git add -A -- . "${EXCLUDES[@]}"
             git commit -m "rn-review-pipeline: add/update tests for this PR"
             git push origin HEAD:refs/heads/$HEAD_REF
           fi
