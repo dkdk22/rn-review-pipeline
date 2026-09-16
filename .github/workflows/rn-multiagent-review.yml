@@ -19,11 +19,18 @@ permissions:
   pull-requests: write
   id-token: write
   actions: read
+  statuses: write
 
 jobs:
   rn-review:
-    # This job's own pass/fail IS the required check — branch protection
-    # should require "RN Multiagent Review (reusable) / rn-review".
+    # Branch protection should require the "rn-review-pipeline" commit
+    # status (posted by the "Report commit status for current HEAD" step
+    # below), not this job's own check-suite name — the job's check is tied
+    # to whatever SHA was checked out when it started, but when this job
+    # pushes a new commit, that new SHA is what actually becomes the PR's
+    # head, and nothing guarantees a fresh workflow run fires for it. The
+    # commit status is posted explicitly for HEAD at the end of this run,
+    # so it always covers the real final SHA — pushed or not.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR head
@@ -147,17 +154,47 @@ jobs:
             git push origin HEAD:refs/heads/$HEAD_REF
           fi
 
+      - name: Read verdict
+        id: verdict
+        run: |
+          if [ -f .rn-review-verdict.json ]; then
+            pass=$(node -pe "require('./.rn-review-verdict.json').pass" 2>/dev/null || echo false)
+          else
+            pass=false
+          fi
+          echo "pass=$pass" >> "$GITHUB_OUTPUT"
+          echo "Verdict: pass=$pass"
+
+      # Branch protection should require THIS status, not the workflow's own
+      # check-suite: when the commit/push step above adds a new commit, that
+      # push may not reliably re-trigger a fresh workflow run for the new SHA
+      # (GitHub does not always fire a new run for a GITHUB_TOKEN-authored
+      # push, precisely to avoid recursive triggering) — so nothing would
+      # ever report against the PR's actual final head. Posting a status for
+      # HEAD here, from the same run that already did the verification,
+      # covers that SHA unconditionally, whether or not a push happened.
+      - name: Report commit status for current HEAD
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          state="success"
+          desc="rn-review-pipeline: review + tests passed"
+          if [ "${{ steps.verdict.outputs.pass }}" != "true" ]; then
+            state="failure"
+            desc="rn-review-pipeline: verdict failing — see PR comment"
+          fi
+          gh api "repos/${{ github.repository }}/statuses/$sha" \
+            -f state="$state" \
+            -f context="rn-review-pipeline" \
+            -f description="$desc" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            > /dev/null
+
       - name: Enforce verdict
         run: |
-          if [ ! -f .rn-review-verdict.json ]; then
-            echo "::error::rn-review-pipeline did not produce a verdict file — treating as failure."
-            exit 1
-          fi
-          pass=$(node -pe "require('./.rn-review-verdict.json').pass")
-          summary=$(node -pe "require('./.rn-review-verdict.json').summary")
-          echo "Verdict: pass=$pass"
-          echo "Summary: $summary"
-          if [ "$pass" != "true" ]; then
+          if [ "${{ steps.verdict.outputs.pass }}" != "true" ]; then
             echo "::error::rn-review-pipeline verdict is failing — see PR comment for details."
             exit 1
           fi

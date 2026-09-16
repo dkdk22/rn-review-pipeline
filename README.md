@@ -80,7 +80,10 @@ API key de pago por token:
 
 4. Una vez que el workflow haya corrido al menos una vez, ve a Settings →
    Branches → Branch protection rule para tu rama principal, y marca como
-   required el check `RN Multiagent Review (reusable) / rn-review`.
+   required el check **`rn-review-pipeline`** (no el nombre del job de
+   Actions) — es un commit status que el propio run publica explícitamente
+   sobre el commit final, así que siempre cubre el SHA real del PR incluso
+   cuando el pipeline le agrega commits propios.
 
 Nota: el token de `claude setup-token` puede expirar con el tiempo — si el
 workflow empieza a fallar en el paso de autenticación, genera uno nuevo y
