@@ -72,10 +72,16 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Installed at user scope (~/.claude/agents), not the repo's own
+      # .claude/ — claude-code-action treats the checked-out PR head's
+      # .claude/ as untrusted and restores it from a trusted ref, which
+      # would silently discard agent files placed inside the repo. The
+      # Claude Code SDK loads user + project + local settings sources, so
+      # user-level agents are still picked up without touching repo content.
       - name: Install pipeline agents into this run
         run: |
-          mkdir -p .claude/agents
-          cp .rn-pipeline/agents/*.md .claude/agents/
+          mkdir -p ~/.claude/agents
+          cp .rn-pipeline/agents/*.md ~/.claude/agents/
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -121,11 +127,22 @@ jobs:
         if: steps.prior_commit.outputs.exists != 'true'
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -n "$(git status --porcelain)" ]; then
+          # Exclude workflow-internal paths: .rn-pipeline is the checked-out
+          # rn-review-pipeline clone (not app content), .rn-review-verdict.json
+          # is read by the next step and must stay on disk (just not committed),
+          # and .claude/agents is this run's copied subagent defs, not the
+          # project's own .claude config.
+          if [ -n "$(git status --porcelain -- . ':!.rn-pipeline' ':!.claude/agents' ':!.rn-review-verdict.json')" ]; then
             git config user.name "rn-review-pipeline"
             git config user.email "rn-review-pipeline@users.noreply.github.com"
-            git add -A
+            # claude-code-action revokes its own installation token as soon as
+            # it finishes (its post-step runs before this one) — re-authenticate
+            # with the still-valid workflow GITHUB_TOKEN rather than relying on
+            # whatever git credential state it left behind.
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+            git add -A -- . ':!.rn-pipeline' ':!.claude/agents' ':!.rn-review-verdict.json'
             git commit -m "rn-review-pipeline: add/update tests for this PR"
             git push origin HEAD:refs/heads/$HEAD_REF
           fi
