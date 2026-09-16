@@ -40,17 +40,20 @@ jobs:
           path: .rn-pipeline
 
       # Loop-safety guarantee #1 (model-independent, checked before anything
-      # else runs): a hard ceiling on how many times this workflow may run
-      # for a single PR, regardless of what any agent does or decides.
-      - name: Circuit breaker — cap runs per PR
+      # else runs): a hard ceiling on how many times this workflow may fire
+      # for a single PR within a short recent window. Windowed, not
+      # lifetime — a PR legitimately reviewed several times over hours or
+      # days must never get permanently stuck; a runaway loop firing many
+      # times in minutes is what this actually catches.
+      - name: Circuit breaker — cap runs per PR in a short window
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           count=$(gh api "repos/${{ github.repository }}/actions/runs?event=pull_request&per_page=100" \
-            --jq "[.workflow_runs[] | select(.pull_requests[]?.number == ${{ github.event.pull_request.number }})] | length")
-          echo "Prior runs seen for PR #${{ github.event.pull_request.number }}: $count"
-          if [ "$count" -gt 5 ]; then
-            echo "::error::Circuit breaker tripped: more than 5 rn-review runs recorded for this PR. Stopping before running any agent, to avoid a runaway loop — a human should investigate."
+            --jq "[.workflow_runs[] | select(.pull_requests[]?.number == ${{ github.event.pull_request.number }}) | select((now - (.created_at | fromdateiso8601)) < 900)] | length")
+          echo "Runs seen for PR #${{ github.event.pull_request.number }} in the last 15 minutes: $count"
+          if [ "$count" -gt 8 ]; then
+            echo "::error::Circuit breaker tripped: more than 8 rn-review runs in the last 15 minutes for this PR. Stopping before running any agent, to avoid a runaway loop — a human should investigate."
             exit 1
           fi
 
