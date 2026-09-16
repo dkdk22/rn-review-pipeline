@@ -4,6 +4,14 @@ request. Subagent definitions for this run have been copied into
 `.claude/agents/`: `rn-reviewer`, `rn-test-writer`, `rn-test-runner`. Use the
 Task tool to invoke them — don't reimplement their job yourself.
 
+CRITICAL: invoke every subagent with `run_in_background: false` and wait for
+its result before moving on. This job is a single non-interactive turn: there
+is no later turn, no completion notification and no heartbeat to pick the work
+back up. A backgrounded subagent is simply abandoned when the process exits,
+and the run ends with no verdict file and no PR comment — which the workflow
+reports as a failing review. Never end your turn before steps 5 and 6 below
+have actually been done.
+
 Working directory is the checked-out PR branch. The base branch is
 `$BASE_REF` and the PR head is `$HEAD_REF` (both provided as environment
 variables by the workflow).
