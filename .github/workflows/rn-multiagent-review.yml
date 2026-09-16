@@ -38,6 +38,36 @@ jobs:
           ref: ${{ inputs.pipeline_ref }}
           path: .rn-pipeline
 
+      # Loop-safety guarantee #1 (model-independent, checked before anything
+      # else runs): a hard ceiling on how many times this workflow may run
+      # for a single PR, regardless of what any agent does or decides.
+      - name: Circuit breaker — cap runs per PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh api "repos/${{ github.repository }}/actions/runs?event=pull_request&per_page=100" \
+            --jq "[.workflow_runs[] | select(.pull_requests[]?.number == ${{ github.event.pull_request.number }})] | length")
+          echo "Prior runs seen for PR #${{ github.event.pull_request.number }}: $count"
+          if [ "$count" -gt 5 ]; then
+            echo "::error::Circuit breaker tripped: more than 5 rn-review runs recorded for this PR. Stopping before running any agent, to avoid a runaway loop — a human should investigate."
+            exit 1
+          fi
+
+      # Loop-safety guarantee #2: has the pipeline already pushed a commit
+      # on this PR? If so, this run only verifies — it may not push again,
+      # enforced below by an `if:` on the commit/push step itself (not by
+      # asking the agent nicely).
+      - name: Check for prior pipeline commit
+        id: prior_commit
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          if git log "origin/${{ github.event.pull_request.base.ref }}..HEAD" \
+              --author="rn-review-pipeline@users.noreply.github.com" --oneline | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install pipeline agents into this run
         run: |
           mkdir -p .claude/agents
@@ -67,6 +97,7 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PRIOR_BOT_COMMIT: ${{ steps.prior_commit.outputs.exists }}
           GH_TOKEN: ${{ github.token }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -76,6 +107,24 @@ jobs:
           claude_args: |
             --model claude-sonnet-5
             --allowedTools Edit,Read,Write,Bash,Task,Grep,Glob
+
+      # Loop-safety guarantee #2, enforced: this step is the ONLY thing that
+      # commits/pushes on behalf of the pipeline, and it is skipped outright
+      # whenever a prior pipeline commit already exists on this PR — no
+      # matter what the agent wrote to disk above. At most one bot push per
+      # PR, by construction, not by the agent's cooperation.
+      - name: Commit and push pipeline changes
+        if: steps.prior_commit.outputs.exists != 'true'
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "rn-review-pipeline"
+            git config user.email "rn-review-pipeline@users.noreply.github.com"
+            git add -A
+            git commit -m "rn-review-pipeline: add/update tests for this PR"
+            git push origin HEAD:refs/heads/$HEAD_REF
+          fi
 
       - name: Enforce verdict
         run: |

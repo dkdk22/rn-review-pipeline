@@ -26,6 +26,30 @@ En cada Pull Request:
 (no hay un emulador Android/iOS configurado en este workflow todavía) — eso
 sería una fase siguiente si hace falta e2e ejecutado automáticamente.
 
+## Protección contra loops infinitos
+
+Cuando el pipeline pushea tests nuevos a la rama del PR, ese push dispara un
+nuevo evento `synchronize` — sin cuidado, eso podría re-disparar el pipeline
+indefinidamente. Dos garantías, ninguna basada en "confiar en que el agente
+obedezca":
+
+1. **Un solo push por PR, forzado por el propio YAML.** Un step
+   determinístico (`Check for prior pipeline commit`) revisa el historial de
+   git buscando un commit previo del propio pipeline en este PR. El step que
+   hace `git commit`/`git push` tiene un `if:` que se salta por completo si
+   ya existe uno — así el agente escriba archivos igual en esa corrida, no
+   hay ningún paso que los suba. No depende de que el modelo decida no
+   pushear (aunque también se le indica eso en el prompt como refuerzo).
+2. **Circuit breaker numérico, independiente del agente.** Antes de instalar
+   o correr Claude, un step cuenta cuántos workflow runs ya existen para ese
+   PR vía la API de GitHub; si supera 5, el job falla inmediatamente sin
+   gastar nada. Es el techo real, absoluto, para cualquier caso raro que las
+   dos protecciones anteriores no contemplen.
+
+En el flujo normal esto da como mucho 2 corridas por evento humano: la que
+revisa y pushea tests, y una de verificación sobre ese mismo push que ya no
+puede pushear de nuevo.
+
 ## Cómo integrar un repo nuevo
 
 Este pipeline corre con tu **suscripción de Claude (Pro/Max)**, no con una
