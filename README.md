@@ -10,7 +10,11 @@ reconfigurar la lógica en cada proyecto nuevo.
 En cada Pull Request:
 
 1. **`rn-reviewer`** (Opus) revisa el diff: bugs, malas prácticas de
-   React/RN/Expo, seguridad, convenciones del repo.
+   React/RN/Expo, seguridad, convenciones del repo. Los bugs/seguridad
+   bloquean el merge; la calidad de código y buenas prácticas mejorables
+   (duplicación, naming, cobertura de tests faltante, manejo de errores poco
+   principiado, etc.) se listan como **recomendaciones no bloqueantes** en
+   su propia sección del comentario — visibles, pero no impiden el pass.
 2. **`rn-test-writer`** (Sonnet) escribe/actualiza tests Jest + React Native
    Testing Library para el código nuevo, y añade un flujo Maestro (`e2e/`)
    cuando el cambio toca navegación o un flujo de usuario. Si el repo no

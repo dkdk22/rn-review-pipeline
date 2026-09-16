@@ -63,11 +63,15 @@ Do exactly this, in order:
    `true`.
 
 6. Post ONE PR comment (use `gh pr comment $PR_NUMBER --body-file -` or
-   equivalent) that includes: the reviewer's findings, what tests were
-   added/changed (or, on a verification-only pass, that this is confirming
-   the previous pass's changes), the test-runner's result, and the final
-   verdict. Keep it scannable — headers and bullet points, not a wall of
-   prose.
+   equivalent) that includes: the reviewer's blocking findings, what tests
+   were added/changed (or, on a verification-only pass, that this is
+   confirming the previous pass's changes), the test-runner's result, and
+   the final verdict. If the reviewer returned any `severity: recommendation`
+   findings, give them their own clearly-labeled section (e.g. "### 💡
+   Recommendations (non-blocking)") — don't bury them inside the blocking
+   findings or drop them from the comment; they still need to reach the
+   PR author even though they don't affect the verdict. Keep it scannable —
+   headers and bullet points, not a wall of prose.
 
 Do not ask the user any questions — there is no human to answer them in this
 context. Make the best defensible call and report your reasoning instead of

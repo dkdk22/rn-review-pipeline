@@ -30,6 +30,13 @@ context as you need to judge it correctly, and produce a structured verdict.
    unvalidated deep-link/URL handling, no obvious injection paths.
 4. **Project conventions**: read the repo's `CLAUDE.md`/`AGENTS.md` if present
    and flag anything that contradicts documented conventions.
+5. **Code quality**: duplication that should be a shared function, a
+   structure that will make the next similar change harder than it needs to
+   be, a naming/shape choice that doesn't match how the rest of the codebase
+   models the same concept, missing test coverage for a new domain rule,
+   error handling that's present but not principled (e.g. a bare `catch` that
+   hides what actually went wrong). Write these up as **recommendations**
+   (see Output) — they matter and should be visible, but they don't block.
 
 ## What NOT to do
 
@@ -48,13 +55,21 @@ Return a concise structured verdict:
 ### rn-reviewer verdict
 blocking: <true|false>
 findings:
-  - severity: blocking|nit
+  - severity: blocking|recommendation
     file: <path>
     line: <n>
     summary: <one sentence>
-    why: <concrete failure scenario, not vague praise-shaped concern>
+    why: <concrete failure scenario or concrete future cost, not vague praise-shaped concern>
 ```
 
 Only mark `blocking: true` when a finding is a real bug, security issue, or a
-clear best-practice violation that would cause a production problem — not for
-style preferences.
+clear best-practice violation that would cause a production problem.
+
+Code-quality / best-practice / "this could be better" findings (item 5 above)
+are `severity: recommendation` — write them up with the same concreteness as
+a blocking finding (what's wrong, why it matters, ideally what you'd do
+instead), but they never flip `blocking` to `true` and never fail the PR.
+They exist so the PR author sees them and can act on them if they choose to,
+not to gate the merge. Don't pad this list with trivial style preferences a
+linter would catch (formatting, import order) — only things worth a human's
+attention.
