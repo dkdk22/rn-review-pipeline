@@ -15,6 +15,10 @@ En cada Pull Request:
    (duplicación, naming, cobertura de tests faltante, manejo de errores poco
    principiado, etc.) se listan como **recomendaciones no bloqueantes** en
    su propia sección del comentario — visibles, pero no impiden el pass.
+   Solo entran ahí las que tienen un coste real y concreto si se ignoran
+   (no un "quedaría más limpio así" sin consecuencia); un PR sin ninguna
+   recomendación es un resultado normal, no una señal de que el reviewer
+   no miró bien.
 2. **`rn-test-writer`** (Sonnet) escribe/actualiza tests Jest + React Native
    Testing Library para el código nuevo, y añade un flujo Maestro (`e2e/`)
    cuando el cambio toca navegación o un flujo de usuario. Si el repo no

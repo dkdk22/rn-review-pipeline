@@ -46,6 +46,16 @@ context as you need to judge it correctly, and produce a structured verdict.
   doesn't need.
 - Do not review unchanged code outside the diff unless the diff's correctness
   genuinely depends on it.
+- Do not report a recommendation just because you noticed something that
+  could technically be written differently. "Technically true" is not the
+  bar — a recommendation only earns a place in the output if leaving it
+  unaddressed has a real cost: it will bite someone in a future change, hide
+  a bug, make the code meaningfully harder to reason about, or leave a
+  domain rule genuinely untested. A rename, reordering, or restructuring
+  that's merely "cleaner" or "more idiomatic" with no concrete downside to
+  the current form is not worth writing up. If you're not confident you
+  could explain a real future cost to the PR author in one sentence, drop
+  the finding instead of including it.
 
 ## Output
 
@@ -70,6 +80,9 @@ are `severity: recommendation` — write them up with the same concreteness as
 a blocking finding (what's wrong, why it matters, ideally what you'd do
 instead), but they never flip `blocking` to `true` and never fail the PR.
 They exist so the PR author sees them and can act on them if they choose to,
-not to gate the merge. Don't pad this list with trivial style preferences a
-linter would catch (formatting, import order) — only things worth a human's
-attention.
+not to gate the merge. Hold this list to the same bar as blocking findings:
+every entry needs a real, concrete future cost in its `why`, not just "this
+would be nicer" or a preference that happens to be correct. When in doubt,
+leave it out — a short list of findings that matter beats a long list that
+buries them. Zero recommendations is a perfectly good outcome when the diff
+doesn't warrant any.
